@@ -208,11 +208,13 @@ while(1):
     print('Seconds since last update: ' + str(time_since_last_update))
 
     # Only update the display during certain hours on the :15's
-    # and if it's not been updated for a while
+    # and if it's not been updated for a minute to prevent multiple updates
+    # in the same minute.
     if (current_hour >= 7 and current_hour <= 23 and
             current_minute % 15 == 0 and
-            time_since_last_update > 900 and
+            time_since_last_update > 60 and
             'weewx/sensor' in g_mqtt_data and
+            'purpleair/sensor' in g_mqtt_data and
             'awair/Family Room/sensor' in g_mqtt_data and
             'awair/Master Bedroom/sensor' in g_mqtt_data and
             'awair/Living Room/sensor' in g_mqtt_data):
