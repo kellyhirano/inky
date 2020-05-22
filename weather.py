@@ -109,6 +109,21 @@ def draw_awair_temp_text_line(inky_display, draw, this_font, start_x, start_y,
                   temp_str, inky_display.BLACK, font=this_font)
 
 
+def draw_kitchen_temp_text_line(inky_display, draw, this_font,
+                                start_x, start_y):
+    """Draws the single ine of text for the kitchen"""
+
+    topic_name = 'weewx/sensor'
+    if (topic_name in g_mqtt_data):
+        # Intentional space at the end to deal with library clipping
+        temp_str = 'K {}\u00b0 {:+.1f}\u00b0       {} '\
+            .format(g_mqtt_data[topic_name]['indoor_temperature'],
+                    float(g_mqtt_data[topic_name]['indoor_temp_change']),
+                    time.strftime("%H:%M", time.localtime()))
+        draw.text((start_x, start_y),
+                  temp_str, inky_display.BLACK, font=this_font)
+
+
 def draw_forecast(inky_display, draw, this_font, start_y):
     """Draws the lines of text for the upcoming weather forecast."""
     # Sample data
@@ -131,13 +146,6 @@ def draw_forecast(inky_display, draw, this_font, start_y):
             break
 
         count += 1
-
-
-def draw_update_time(inky_display, draw, this_font, start_y):
-    """Draws the timestamp showing the last updated time."""
-
-    time_str = time.strftime("%a @ %H:%M", time.localtime())
-    draw.text((7, start_y), time_str, inky_display.BLACK, font=this_font)
 
 
 def paint_image():
@@ -170,13 +178,15 @@ def paint_image():
                                   awair_mqtt_room)
         count += 1
 
+    start_y = start_y + ((font_size+1)*count)
+    draw_kitchen_temp_text_line(inky_display, draw, regular_font,
+                                start_x, start_y)
+
     draw.line([(0, inky_display.HEIGHT - 95),
                (inky_display.WIDTH - 1, inky_display.HEIGHT - 95)],
               fill=inky_display.BLACK, width=2)
 
     draw_forecast(inky_display, draw, small_font, inky_display.HEIGHT - 110)
-
-    draw_update_time(inky_display, draw, small_font, inky_display.HEIGHT - 120)
 
     inky_display.set_image(img)
     inky_display.show()
