@@ -116,8 +116,8 @@ def draw_kitchen_temp_text_line(inky_display, draw, this_font,
     topic_name = 'weewx/sensor'
     if (topic_name in g_mqtt_data):
         # Intentional space at the end to deal with library clipping
-        temp_str = 'K {}\u00b0 {:+.1f}\u00b0       {} '\
-            .format(g_mqtt_data[topic_name]['indoor_temperature'],
+        temp_str = 'K {:.1f}\u00b0 {:+.1f}\u00b0     {} '\
+            .format(float(g_mqtt_data[topic_name]['indoor_temperature']),
                     float(g_mqtt_data[topic_name]['indoor_temp_change']),
                     time.strftime("%H:%M", time.localtime()))
         draw.text((start_x, start_y),
