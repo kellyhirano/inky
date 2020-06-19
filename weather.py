@@ -99,14 +99,21 @@ def draw_awair_temp_text_line(inky_display, draw, this_font, start_x, start_y,
 
     topic_name = 'awair/' + topic_substr + '/sensor'
     if (topic_name in g_mqtt_data):
-        # Intentional space at the end to deal with library clipping
-        temp_str = '{} {}\u00b0 {:+.1f}\u00b0 {} '\
-            .format(topic_substr[0],
-                    g_mqtt_data[topic_name]['temp'],
-                    float(g_mqtt_data[topic_name]['last_hour_temp']),
-                    int(g_mqtt_data[topic_name]['co2']))
+        temperature = g_mqtt_data[topic_name]['temp']
+        temperature_change = g_mqtt_data[topic_name]['last_hour_temp']
+        co2 = g_mqtt_data[topic_name]['co2']
+
         draw.text((start_x, start_y),
-                  temp_str, inky_display.BLACK, font=this_font)
+                  topic_substr[0], inky_display.BLACK,
+                  font=this_font)
+        draw.text((start_x + 25, start_y),
+                  '{}\u00b0'.format(temperature),
+                  inky_display.BLACK, font=this_font)
+        draw.text((start_x + 85, start_y),
+                  '{:+.1f}\u00b0'.format(float(temperature_change)),
+                  inky_display.BLACK, font=this_font)
+        draw.text((start_x + 145, start_y),
+                  str(int(co2)), inky_display.BLACK, font=this_font)
 
 
 def draw_kitchen_temp_text_line(inky_display, draw, this_font,
@@ -115,13 +122,20 @@ def draw_kitchen_temp_text_line(inky_display, draw, this_font,
 
     topic_name = 'weewx/sensor'
     if (topic_name in g_mqtt_data):
-        # Intentional space at the end to deal with library clipping
-        temp_str = 'K {:.1f}\u00b0 {:+.1f}\u00b0     {} '\
-            .format(float(g_mqtt_data[topic_name]['indoor_temperature']),
-                    float(g_mqtt_data[topic_name]['indoor_temp_change']),
-                    time.strftime("%H:%M", time.localtime()))
+        indoor_temp = g_mqtt_data[topic_name]['indoor_temperature']
+        indoor_temp_change = g_mqtt_data[topic_name]['indoor_temp_change']
+
         draw.text((start_x, start_y),
-                  temp_str, inky_display.BLACK, font=this_font)
+                  'K', inky_display.BLACK, font=this_font)
+        draw.text((start_x + 25, start_y),
+                  '{:.1f}\u00b0'.format(float(indoor_temp)),
+                  inky_display.BLACK, font=this_font)
+        draw.text((start_x + 85, start_y),
+                  '{:+.1f}\u00b0'.format(float(indoor_temp_change)),
+                  inky_display.BLACK, font=this_font)
+        draw.text((start_x + 160, start_y),
+                  time.strftime("%H:%M", time.localtime()),
+                  inky_display.BLACK, font=this_font)
 
 
 def draw_forecast(inky_display, draw, this_font, start_y):
