@@ -1,0 +1,14 @@
+[Unit]
+Description=Run Pi Inky Weather Display
+Wants=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 -u weather.py
+WorkingDirectory=/home/pi/inky
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
