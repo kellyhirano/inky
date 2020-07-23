@@ -43,8 +43,6 @@ def on_message(client, userdata, msg):
 
     g_mqtt_data[msg.topic] = message_data
 
-    print(g_mqtt_data)
-
 
 def draw_outside_temp_text_line(inky_display, draw, main_font,
                                 diff_font, start_x, start_y):
@@ -223,13 +221,10 @@ current_time = 0
 last_update_time = 0
 
 while(1):
-    print('LOOP')
-    print(g_mqtt_data)
     current_time = int(time.time())
     time_since_last_update = current_time - last_update_time
     current_hour = int(time.strftime("%H", time.localtime()))
     current_minute = int(time.strftime("%M", time.localtime()))
-    print('Seconds since last update: ' + str(time_since_last_update))
 
     # Only update the display during certain hours on the :15's
     # and if it's not been updated for a minute to prevent multiple updates
@@ -242,7 +237,7 @@ while(1):
             'awair/Family Room/sensor' in g_mqtt_data and
             'awair/Master Bedroom/sensor' in g_mqtt_data and
             'awair/Living Room/sensor' in g_mqtt_data):
-        print('INSIDE')
+        print('Updating display...')
         paint_image()
         last_update_time = current_time
 
