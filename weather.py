@@ -51,19 +51,19 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
 
     temp = g_mqtt_data['weewx/sensor']['outdoor_temperature']
     temp_delta = g_mqtt_data['weewx/sensor']['outdoor_temp_change']
+    temp_24h_delta = g_mqtt_data['weewx/sensor']['outdoor_24h_temp_change']
 
     temp_str = '{}\u00b0'.format(int(temp))
     draw.text((start_x, start_y), temp_str, inky_display.BLACK, font=main_font)
 
     # Put the temp change right under the degree symbol of the outside temp
-    # Double-digit increases (with decimal) is wider. Either drop the decimal
-    # over 10 or fix the width. Dropping the decimal is easier right now.
     delta_str = '{:+.1f}\u00b0'.format(float(temp_delta))
-    delta_x = 123
-    if (temp_delta >= 10):
-        delta_x = 115
-    draw.text((delta_x, start_y + 70),
+    delta_24h_str = '{:+.1f}\u00b0'.format(float(temp_24h_delta))
+    delta_x = 120
+    draw.text((delta_x, start_y + 52),
               delta_str, inky_display.BLACK, font=diff_font)
+    draw.text((delta_x, start_y + 72),
+              delta_24h_str, inky_display.BLACK, font=diff_font)
 
     y_coord = start_y + 96 + 5
 
