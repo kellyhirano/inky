@@ -79,7 +79,8 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     y_coord += 18 + 5
 
     if (aqi > 100):
-        draw.text((start_x, y_coord), aqi_desc, inky_display.RED, font=diff_font)
+        draw.text((start_x, y_coord), aqi_desc,
+                  inky_display.RED, font=diff_font)
         y_coord += 18 + 5
 
     if (wind_gust >= 10):
@@ -127,7 +128,7 @@ def draw_awair_temp_text_line(inky_display, draw, this_font, start_x, start_y,
         else:
             text_color = inky_display.BLACK
             if (int(co2) > 1000):
-               text_color = inky_display.RED
+                text_color = inky_display.RED
             draw.text((start_x + 145, start_y),
                       str(int(co2)), text_color, font=this_font)
 
