@@ -23,6 +23,7 @@ def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
 
     mqtt_subscriptions = [("weathergov/forecast", 0),
+                          ("weathergov/warnings", 0),
                           ("weewx/sensor", 0),
                           ("purpleair/sensor", 0)]
     for awair_mqtt_room in g_awair_mqtt_rooms:
@@ -71,10 +72,15 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     last_day_rain = g_mqtt_data['weewx/sensor']['last_day_rain']
     wind_gust = g_mqtt_data['weewx/sensor']['wind_gust']
     aqi = g_mqtt_data['purpleair/sensor']['st_aqi']
+    aqi_desc = g_mqtt_data['purpleair/sensor']['st_aqi_desc']
 
-    wind_str = 'AQI: {}'.format(aqi)
-    draw.text((start_x, y_coord), wind_str, inky_display.BLACK, font=diff_font)
+    aqi_str = 'AQI: {}'.format(aqi)
+    draw.text((start_x, y_coord), aqi_str, inky_display.BLACK, font=diff_font)
     y_coord += 18 + 5
+
+    if (aqi > 100):
+        draw.text((start_x, y_coord), aqi_desc, inky_display.RED, font=diff_font)
+        y_coord += 18 + 5
 
     if (wind_gust >= 10):
         wind_str = 'GUST: {}'.format(wind_gust)
@@ -101,6 +107,10 @@ def draw_awair_temp_text_line(inky_display, draw, this_font, start_x, start_y,
         temperature_change = g_mqtt_data[topic_name]['last_hour_temp']
         co2 = g_mqtt_data[topic_name]['co2']
 
+        aqi = 0
+        if ('aqi' in g_mqtt_data[topic_name]):
+            aqi = g_mqtt_data[topic_name]['aqi']
+
         draw.text((start_x, start_y),
                   topic_substr[0], inky_display.BLACK,
                   font=this_font)
@@ -110,8 +120,16 @@ def draw_awair_temp_text_line(inky_display, draw, this_font, start_x, start_y,
         draw.text((start_x + 85, start_y),
                   '{:+.1f}\u00b0'.format(float(temperature_change)),
                   inky_display.BLACK, font=this_font)
-        draw.text((start_x + 145, start_y),
-                  str(int(co2)), inky_display.BLACK, font=this_font)
+
+        if (aqi > 100):
+            draw.text((start_x + 145, start_y),
+                      'A ' + str(int(aqi)), inky_display.RED, font=this_font)
+        else:
+            text_color = inky_display.BLACK
+            if (int(co2) > 1000):
+               text_color = inky_display.RED
+            draw.text((start_x + 145, start_y),
+                      str(int(co2)), text_color, font=this_font)
 
 
 def draw_kitchen_temp_text_line(inky_display, draw, this_font,
@@ -144,6 +162,22 @@ def draw_forecast(inky_display, draw, this_font, start_y):
     global g_mqtt_data
 
     count = 1
+    max_items = 4
+
+    if 'weathergov/warnings' in g_mqtt_data:
+        for warning in g_mqtt_data['weathergov/warnings']:
+            day_str = '{}: {}'.format(warning['title'],
+                                      warning['desc'])
+            str_w, str_h = this_font.getsize(day_str)
+            draw.text((7, start_y + (count * str_h)),
+                      day_str, inky_display.RED, font=this_font)
+
+            count += 1
+
+            # Only show max_items
+            # Return here vs break later
+            if (count > max_items):
+                return
 
     for day_info in g_mqtt_data['weathergov/forecast']:
         day_str = '{}: {}, {}\u00b0'.format(day_info['day'],
@@ -153,16 +187,16 @@ def draw_forecast(inky_display, draw, this_font, start_y):
         draw.text((7, start_y + (count * str_h)),
                   day_str, inky_display.BLACK, font=this_font)
 
-        # Only show four items
-        if (count > 3):
-            break
-
         count += 1
+
+        # Only show max_items
+        if (count > max_items):
+            break
 
 
 def paint_image():
     """Paints the entire display, calling other draw functions."""
-    inky_display = InkyWHAT("black")
+    inky_display = InkyWHAT("red")
     inky_display.set_border(inky_display.BLACK)
 
     img = Image.new("P", (inky_display.WIDTH, inky_display.HEIGHT))
@@ -242,7 +276,7 @@ while(1):
         last_update_time = current_time
 
     client.loop()
-    time.sleep(5)
+    time.sleep(3)
 
     # Sample mqtt data
     # weewx/sensor -> {"outdoor_temperature": 43.9, "indoor_temperature": 70.5,
