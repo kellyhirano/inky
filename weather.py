@@ -25,6 +25,7 @@ def on_connect(client, userdata, flags, rc):
     mqtt_subscriptions = [("weathergov/forecast", 0),
                           ("weathergov/warnings", 0),
                           ("weewx/sensor", 0),
+                          ("purpleair/last_hour", 0),
                           ("purpleair/sensor", 0)]
     for awair_mqtt_room in g_awair_mqtt_rooms:
         room_tuple = ("awair/" + awair_mqtt_room + "/sensor", 0)
@@ -72,15 +73,15 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     last_day_rain = g_mqtt_data['weewx/sensor']['last_day_rain']
     wind_gust = g_mqtt_data['weewx/sensor']['wind_gust']
     aqi = g_mqtt_data['purpleair/sensor']['st_aqi']
+    last_hour_aqi = g_mqtt_data['purpleair/last_hour']['st_aqi']
     aqi_desc = g_mqtt_data['purpleair/sensor']['st_aqi_desc']
 
-    aqi_str = 'AQI: {}'.format(aqi)
+    aqi_str = 'AQI: {}  {:+d}'.format(aqi, last_hour_aqi)
     draw.text((start_x, y_coord), aqi_str, inky_display.BLACK, font=diff_font)
     y_coord += 18 + 5
 
     if (aqi > 100):
-        draw.text((start_x, y_coord), aqi_desc,
-                  inky_display.RED, font=diff_font)
+        draw.text((start_x, y_coord), aqi_desc, inky_display.RED, font=diff_font)
         y_coord += 18 + 5
 
     if (wind_gust >= 10):
@@ -128,7 +129,7 @@ def draw_awair_temp_text_line(inky_display, draw, this_font, start_x, start_y,
         else:
             text_color = inky_display.BLACK
             if (int(co2) > 1000):
-                text_color = inky_display.RED
+               text_color = inky_display.RED
             draw.text((start_x + 145, start_y),
                       str(int(co2)), text_color, font=this_font)
 
