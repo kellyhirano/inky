@@ -81,7 +81,8 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     y_coord += 18 + 5
 
     if (aqi > 100):
-        draw.text((start_x, y_coord), aqi_desc, inky_display.RED, font=diff_font)
+        draw.text((start_x, y_coord), aqi_desc,
+                  inky_display.RED, font=diff_font)
         y_coord += 18 + 5
 
     if (wind_gust >= 10):
@@ -129,7 +130,7 @@ def draw_awair_temp_text_line(inky_display, draw, this_font, start_x, start_y,
         else:
             text_color = inky_display.BLACK
             if (int(co2) > 1000):
-               text_color = inky_display.RED
+                text_color = inky_display.RED
             draw.text((start_x + 145, start_y),
                       str(int(co2)), text_color, font=this_font)
 
@@ -250,7 +251,8 @@ client = mqtt.Client()
 client.on_connect = on_connect
 client.on_message = on_message
 
-client.connect(mqtt_host, mqtt_host_port, 60)
+client.connect_async(mqtt_host, mqtt_host_port, 60)
+client.loop_start()
 
 time.tzset()
 current_time = 0
@@ -277,8 +279,7 @@ while(1):
         paint_image()
         last_update_time = current_time
 
-    client.loop()
-    time.sleep(3)
+    time.sleep(10)
 
     # Sample mqtt data
     # weewx/sensor -> {"outdoor_temperature": 43.9, "indoor_temperature": 70.5,
