@@ -47,7 +47,7 @@ def on_message(client, userdata, msg):
 
 
 def draw_outside_temp_text_line(inky_display, draw, main_font,
-                                diff_font, start_x, start_y):
+                                small_main_font, diff_font, start_x, start_y):
     """Draws the outside temperature and last hour temperature delta."""
     global g_mqtt_data
 
@@ -55,14 +55,25 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     temp_delta = g_mqtt_data['weewx/sensor']['outdoor_temp_change']
     temp_24h_delta = g_mqtt_data['weewx/sensor']['outdoor_24h_temp_change']
 
+    # If the temp is >=100, it needs to be a smaller font
+    # Also, moving the 1hr delta below the main temp in this case
+    big_temp_font = main_font
+    delta_x_offset = 0
+    delta_y_offset = 0
+    if (temp >= 100):
+        big_temp_font = small_main_font
+        delta_x_offset = -60
+        delta_y_offset = 20
+
     temp_str = '{}\u00b0'.format(int(temp))
-    draw.text((start_x, start_y), temp_str, inky_display.BLACK, font=main_font)
+    draw.text((start_x, start_y), temp_str, inky_display.BLACK,
+              font=big_temp_font)
 
     # Put the temp change right under the degree symbol of the outside temp
     delta_str = '{:+.1f}\u00b0'.format(float(temp_delta))
     delta_24h_str = '{:+.1f}\u00b0'.format(float(temp_24h_delta))
     delta_x = 120
-    draw.text((delta_x, start_y + 52),
+    draw.text((delta_x + delta_x_offset, start_y + delta_y_offset + 52),
               delta_str, inky_display.BLACK, font=diff_font)
     draw.text((delta_x, start_y + 72),
               delta_24h_str, inky_display.BLACK, font=diff_font)
@@ -207,16 +218,19 @@ def paint_image():
 
     font_size = 20
     small_font_size = 18
+    large_font_size = 72
     giant_font_size = 96
     giant_font = ImageFont.truetype("freefont/FreeSansBold.ttf",
                                     giant_font_size)
+    large_font = ImageFont.truetype("freefont/FreeSansBold.ttf",
+                                    large_font_size)
     regular_font = ImageFont.truetype("freefont/FreeSansBold.ttf",
                                       font_size)
     small_font = ImageFont.truetype("freefont/FreeSansBold.ttf",
                                     small_font_size)
 
     draw_outside_temp_text_line(inky_display, draw, giant_font,
-                                small_font, 7, 0)
+                                large_font, small_font, 7, 0)
 
     count = 0
     start_x = 175
