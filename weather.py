@@ -169,7 +169,7 @@ def draw_forecast(inky_display, draw, this_font, start_y):
 
     if 'weathergov/warnings' in g_mqtt_data:
         for warning in g_mqtt_data['weathergov/warnings']:
-            day_str = '{}: {}'.format(warning['title'],
+            day_str = '{}: {}'.format(warning['title'].title(),
                                       warning['desc'])
             str_w, str_h = this_font.getsize(day_str)
             draw.text((7, start_y + (count * str_h)),
