@@ -4,6 +4,7 @@ import configparser
 import json
 import sys
 import time
+import json
 import paho.mqtt.client as mqtt
 
 from PIL import Image, ImageFont, ImageDraw
@@ -12,9 +13,8 @@ from inky import InkyWHAT
 
 # Global for data storage
 g_mqtt_data = {}
-g_awair_mqtt_rooms = ("Laundry Room", "Family Room", "Cindy's Room",
-                      "Kyle's Room", "Living Room", "Dining Room",
-                      "Guest Room", "Master Bedroom")
+g_awair_mqtt_rooms = ()
+g_awair_mqtt_ext_rooms = ()
 
 
 def on_connect(client, userdata, flags, rc):
@@ -27,9 +27,11 @@ def on_connect(client, userdata, flags, rc):
                           ("weewx/sensor", 0),
                           ("purpleair/last_hour", 0),
                           ("purpleair/sensor", 0)]
-    for awair_mqtt_room in g_awair_mqtt_rooms:
-        room_tuple = ("awair/" + awair_mqtt_room + "/sensor", 0)
-        mqtt_subscriptions.append(room_tuple)
+    for room_list in (g_awair_mqtt_rooms, g_awair_mqtt_ext_rooms):
+        for awair_mqtt_room in room_list:
+            print(awair_mqtt_room)
+            room_tuple = ("awair/" + awair_mqtt_room + "/sensor", 0)
+            mqtt_subscriptions.append(room_tuple)
 
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
@@ -111,8 +113,8 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
         y_coord += 18 + 5
 
 
-def draw_awair_temp_text_line(inky_display, draw, this_font, start_x, start_y,
-                              topic_substr):
+def draw_awair_text_line(inky_display, draw, this_font, start_x, start_y,
+                         topic_substr):
     """Draws the single line of text for each Awair device."""
 
     topic_name = 'awair/' + topic_substr + '/sensor'
@@ -136,14 +138,46 @@ def draw_awair_temp_text_line(inky_display, draw, this_font, start_x, start_y,
                   inky_display.BLACK, font=this_font)
 
         if (aqi > 100):
-            draw.text((start_x + 145, start_y),
-                      'A ' + str(int(aqi)), inky_display.RED, font=this_font)
+            draw.text((start_x + 150, start_y),
+                      'A' + str(int(aqi)), inky_display.RED, font=this_font)
         else:
             text_color = inky_display.BLACK
             if (int(co2) > 1000):
                 text_color = inky_display.RED
-            draw.text((start_x + 145, start_y),
+            draw.text((start_x + 150, start_y),
                       str(int(co2)), text_color, font=this_font)
+
+
+def draw_ext_awair_text_line(inky_display, draw, this_font, start_x, start_y):
+    """Draws the single line of text for external Awair devices."""
+
+    global g_awair_mqtt_ext_rooms
+
+    for ext_room in g_awair_mqtt_ext_rooms:
+        topic_name = 'awair/' + ext_room + '/sensor'
+        room_name = ext_room.split('/').pop()
+        if (topic_name in g_mqtt_data):
+            temperature = g_mqtt_data[topic_name]['temp']
+
+            aqi = 0
+            if ('aqi' in g_mqtt_data[topic_name]):
+                aqi = g_mqtt_data[topic_name]['aqi']
+
+            draw.text((start_x, start_y),
+                      room_name[0], inky_display.BLACK,
+                      font=this_font)
+
+            start_x_offset = 25
+            if (aqi > 100):
+                draw.text((start_x + start_x_offset, start_y),
+                          'A' + str(int(aqi)), inky_display.RED,
+                          font=this_font)
+            else:
+                draw.text((start_x + start_x_offset, start_y),
+                          '{}\u00b0'.format(temperature),
+                          inky_display.BLACK, font=this_font)
+
+            start_x += 85
 
 
 def draw_kitchen_temp_text_line(inky_display, draw, this_font,
@@ -232,18 +266,20 @@ def paint_image():
     draw_outside_temp_text_line(inky_display, draw, giant_font,
                                 large_font, small_font, 7, 0)
 
+
     count = 0
     start_x = 175
     start_y = 7
     for awair_mqtt_room in g_awair_mqtt_rooms:
-        draw_awair_temp_text_line(inky_display, draw, regular_font,
-                                  start_x, start_y + ((font_size+1)*count),
-                                  awair_mqtt_room)
+        draw_awair_text_line(inky_display, draw, regular_font,
+                             start_x, start_y + ((font_size+1)*count),
+                             awair_mqtt_room)
         count += 1
 
     start_y = start_y + ((font_size+1)*count)
     draw_kitchen_temp_text_line(inky_display, draw, regular_font,
                                 start_x, start_y)
+    draw_ext_awair_text_line(inky_display, draw, regular_font, 7, start_y)
 
     draw.line([(0, inky_display.HEIGHT - 95),
                (inky_display.WIDTH - 1, inky_display.HEIGHT - 95)],
@@ -260,6 +296,8 @@ config.read('mqtt.conf')
 
 mqtt_host = config.get('ALL', 'mqtt_host')
 mqtt_host_port = int(config.get('ALL', 'mqtt_host_port'))
+g_awair_mqtt_rooms = json.loads(config.get('AWAIR', 'mqtt_subs'))
+g_awair_mqtt_ext_rooms = json.loads(config.get('AWAIR', 'mqtt_ext_subs'))
 
 client = mqtt.Client()
 client.on_connect = on_connect
@@ -273,6 +311,9 @@ current_time = 0
 last_update_time = 0
 
 while(1):
+    # Moved sleep to top to allow for mqtt initialization
+    time.sleep(10)
+
     current_time = int(time.time())
     time_since_last_update = current_time - last_update_time
     current_hour = int(time.strftime("%H", time.localtime()))
@@ -283,17 +324,10 @@ while(1):
     # in the same minute.
     if (current_hour >= 7 and current_hour <= 23 and
             current_minute % 15 == 0 and
-            time_since_last_update > 60 and
-            'weewx/sensor' in g_mqtt_data and
-            'purpleair/sensor' in g_mqtt_data and
-            'awair/Family Room/sensor' in g_mqtt_data and
-            'awair/Master Bedroom/sensor' in g_mqtt_data and
-            'awair/Living Room/sensor' in g_mqtt_data):
+            time_since_last_update > 60):
         print('Updating display...')
         paint_image()
         last_update_time = current_time
-
-    time.sleep(10)
 
     # Sample mqtt data
     # weewx/sensor -> {"outdoor_temperature": 43.9, "indoor_temperature": 70.5,
