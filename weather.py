@@ -25,7 +25,6 @@ def on_connect(client, userdata, flags, rc):
     mqtt_subscriptions = [("weathergov/forecast", 0),
                           ("weathergov/warnings", 0),
                           ("weewx/sensor", 0),
-                          ("purpleair/last_hour", 0),
                           ("purpleair/sensor", 0)]
     for room_list in (g_awair_mqtt_rooms, g_awair_mqtt_ext_rooms):
         for awair_mqtt_room in room_list:
@@ -86,10 +85,14 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     last_day_rain = g_mqtt_data['weewx/sensor']['last_day_rain']
     wind_gust = g_mqtt_data['weewx/sensor']['wind_gust']
     aqi = g_mqtt_data['purpleair/sensor']['st_aqi']
-    last_hour_aqi = g_mqtt_data['purpleair/last_hour']['st_aqi']
+    lrapa_aqi = g_mqtt_data['purpleair/sensor']['st_lrapa_aqi']
+    last_hour_aqi = g_mqtt_data['purpleair/sensor']['st_aqi_last_hour']
+    last_hour_lrapa_aqi \
+        = g_mqtt_data['purpleair/sensor']['st_lrapa_aqi_last_hour']
     aqi_desc = g_mqtt_data['purpleair/sensor']['st_aqi_desc']
 
-    aqi_str = 'AQI: {}  {:+d}'.format(aqi, last_hour_aqi)
+    aqi_str = 'A{} {:+d}  L{} {:+d}'.format(aqi, last_hour_aqi,
+                                             lrapa_aqi, last_hour_lrapa_aqi)
     draw.text((start_x, y_coord), aqi_str, inky_display.BLACK, font=diff_font)
     y_coord += 18 + 5
 
@@ -152,6 +155,7 @@ def draw_ext_awair_text_line(inky_display, draw, this_font, start_x, start_y):
     """Draws the single line of text for external Awair devices."""
 
     global g_awair_mqtt_ext_rooms
+    count = 0
 
     for ext_room in g_awair_mqtt_ext_rooms:
         topic_name = 'awair/' + ext_room + '/sensor'
@@ -178,6 +182,11 @@ def draw_ext_awair_text_line(inky_display, draw, this_font, start_x, start_y):
                           inky_display.BLACK, font=this_font)
 
             start_x += 85
+
+            # Only allow two external rooms to be displayed
+            count += 1
+            if count > 2:
+                break
 
 
 def draw_kitchen_temp_text_line(inky_display, draw, this_font,
@@ -265,7 +274,6 @@ def paint_image():
 
     draw_outside_temp_text_line(inky_display, draw, giant_font,
                                 large_font, small_font, 7, 0)
-
 
     count = 0
     start_x = 175
