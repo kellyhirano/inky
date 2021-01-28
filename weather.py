@@ -5,11 +5,14 @@ import json
 import sys
 import time
 import json
+import re
 import paho.mqtt.client as mqtt
+import datetime
 
 from PIL import Image, ImageFont, ImageDraw
 from font_hanken_grotesk import HankenGroteskBold, HankenGroteskMedium
 from inky import InkyWHAT
+from suntime import Sun, SunTimeException
 
 # Global for data storage
 g_mqtt_data = {}
@@ -92,7 +95,7 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     aqi_desc = g_mqtt_data['purpleair/sensor']['st_aqi_desc']
 
     aqi_str = 'A{} {:+d}  L{} {:+d}'.format(aqi, last_hour_aqi,
-                                             lrapa_aqi, last_hour_lrapa_aqi)
+                                            lrapa_aqi, last_hour_lrapa_aqi)
     draw.text((start_x, y_coord), aqi_str, inky_display.BLACK, font=diff_font)
     y_coord += 18 + 5
 
@@ -110,7 +113,7 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     if (last_day_rain > 0):
         last_day_rain_str = '24h: {}"'.format(last_day_rain)
         if (rain_rate > 0):
-            last_day_rain_str += ' @ {:.2f}"/h'.format(rain_rate)
+            last_day_rain_str += ' @{:.2f}"/h'.format(rain_rate)
         draw.text((start_x, y_coord),
                   last_day_rain_str, inky_display.BLACK, font=diff_font)
         y_coord += 18 + 5
@@ -237,9 +240,17 @@ def draw_forecast(inky_display, draw, this_font, start_y):
                 return
 
     for day_info in g_mqtt_data['weathergov/forecast']:
-        day_str = '{}: {}, {}\u00b0'.format(day_info['day'],
+        time_str = day_info['day']
+        time_str = re.sub(r'DAY.*', r'', time_str)
+        time_str = re.sub(r'THIS ', r'', time_str)
+
+        day_str = '{}: {}, {}\u00b0'.format(time_str,
                                             day_info['forecast'],
                                             day_info['temp'])
+
+        if day_info['precip_amount']:
+            day_str += ' {}'.format(day_info['precip_amount'])
+
         str_w, str_h = this_font.getsize(day_str)
         draw.text((7, start_y + (count * str_h)),
                   day_str, inky_display.BLACK, font=this_font)
@@ -254,7 +265,6 @@ def draw_forecast(inky_display, draw, this_font, start_y):
 def paint_image():
     """Paints the entire display, calling other draw functions."""
     inky_display = InkyWHAT("red")
-    inky_display.set_border(inky_display.BLACK)
 
     img = Image.new("P", (inky_display.WIDTH, inky_display.HEIGHT))
     draw = ImageDraw.Draw(img)
@@ -300,7 +310,7 @@ def paint_image():
 
 
 config = configparser.ConfigParser()
-config.read('mqtt.conf')
+config.read('inky.conf')
 
 mqtt_host = config.get('ALL', 'mqtt_host')
 mqtt_host_port = int(config.get('ALL', 'mqtt_host_port'))
@@ -317,6 +327,15 @@ client.loop_start()
 time.tzset()
 current_time = 0
 last_update_time = 0
+
+latitude = float(config.get('LOC', 'latitude'))
+longitude = float(config.get('LOC', 'longitude'))
+sun = Sun(latitude, longitude)
+
+sunrise = sun.get_local_sunrise_time()
+sunset = sun.get_local_sunset_time()
+print('sunrise {}, sunset {}'.format(sunrise.strftime('%H:%M'),
+                                     sunset.strftime('%H:%M')))
 
 while(1):
     # Moved sleep to top to allow for mqtt initialization
