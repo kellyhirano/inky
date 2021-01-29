@@ -241,7 +241,7 @@ def draw_forecast(inky_display, draw, this_font, start_y):
 
     for day_info in g_mqtt_data['weathergov/forecast']:
         time_str = day_info['day']
-        time_str = re.sub(r'DAY.*', r'', time_str)
+        time_str = re.sub(r'(\S+)DAY', r'\1', time_str)
         time_str = re.sub(r'THIS ', r'', time_str)
 
         day_str = '{}: {}, {}\u00b0'.format(time_str,
