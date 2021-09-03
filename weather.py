@@ -126,8 +126,11 @@ def draw_awair_text_line(inky_display, draw, this_font, start_x, start_y,
     topic_name = 'awair/' + topic_substr + '/sensor'
     if (topic_name in g_mqtt_data):
         temperature = g_mqtt_data[topic_name]['temp']
-        temperature_change = g_mqtt_data[topic_name]['last_hour_temp']
         co2 = g_mqtt_data[topic_name]['co2']
+
+        temperature_change = 0
+        if ('last_hour_temp' in g_mqtt_data[topic_name]):
+          temperature_change = g_mqtt_data[topic_name]['last_hour_temp']
 
         aqi = 0
         if ('aqi' in g_mqtt_data[topic_name]):
@@ -241,7 +244,8 @@ def draw_forecast(inky_display, draw, this_font, start_y):
 
     for day_info in g_mqtt_data['weathergov/forecast']:
         time_str = day_info['day']
-        time_str = re.sub(r'(\S+)DAY', r'\1', time_str)
+        time_str = re.sub('BIRTHDAY', 'BDAY', time_str)
+        time_str = re.sub(r'(\S{3})\S*DAY', r'\1', time_str)
         time_str = re.sub(r'THIS ', r'', time_str)
 
         day_str = '{}: {}, {}\u00b0'.format(time_str,
