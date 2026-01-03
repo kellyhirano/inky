@@ -4,7 +4,6 @@ import configparser
 import json
 import sys
 import time
-import json
 import re
 import paho.mqtt.client as mqtt
 import datetime
@@ -55,9 +54,10 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     """Draws the outside temperature and last hour temperature delta."""
     global g_mqtt_data
 
-    temp = g_mqtt_data['weewx/sensor']['outdoor_temperature']
-    temp_delta = g_mqtt_data['weewx/sensor']['outdoor_temp_change']
-    temp_24h_delta = g_mqtt_data['weewx/sensor']['outdoor_24h_temp_change']
+    weewx = g_mqtt_data.get('weewx/sensor', {})
+    temp = weewx.get('outdoor_temperature', 0)
+    temp_delta = weewx.get('outdoor_temp_change', 0)
+    temp_24h_delta = weewx.get('outdoor_24h_temp_change', 0)
 
     # If the temp is >=100, it needs to be a smaller font
     # Also, moving the 1hr delta below the main temp in this case
@@ -84,15 +84,15 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
 
     y_coord = start_y + 96 + 5
 
-    rain_rate = g_mqtt_data['weewx/sensor']['rain_rate']
-    last_day_rain = g_mqtt_data['weewx/sensor']['last_day_rain']
-    wind_gust = g_mqtt_data['weewx/sensor']['wind_gust']
-    aqi = g_mqtt_data['purpleair/sensor']['st_aqi']
-    lrapa_aqi = g_mqtt_data['purpleair/sensor']['st_lrapa_aqi']
-    last_hour_aqi = g_mqtt_data['purpleair/sensor']['st_aqi_last_hour']
-    last_hour_lrapa_aqi \
-        = g_mqtt_data['purpleair/sensor']['st_lrapa_aqi_last_hour']
-    aqi_desc = g_mqtt_data['purpleair/sensor']['st_aqi_desc']
+    rain_rate = weewx.get('rain_rate', 0)
+    last_day_rain = weewx.get('last_day_rain', 0)
+    wind_gust = weewx.get('wind_gust', 0)
+    purpleair = g_mqtt_data.get('purpleair/sensor', {})
+    aqi = purpleair.get('st_aqi', 0)
+    lrapa_aqi = purpleair.get('st_lrapa_aqi', 0)
+    last_hour_aqi = purpleair.get('st_aqi_last_hour', 0)
+    last_hour_lrapa_aqi = purpleair.get('st_lrapa_aqi_last_hour', 0)
+    aqi_desc = purpleair.get('st_aqi_desc', '')
 
     aqi_str = 'A{} {:+d}  L{} {:+d}'.format(aqi, last_hour_aqi,
                                             lrapa_aqi, last_hour_lrapa_aqi)
@@ -201,8 +201,8 @@ def draw_kitchen_temp_text_line(inky_display, draw, this_font,
 
     topic_name = 'weewx/sensor'
     if (topic_name in g_mqtt_data):
-        indoor_temp = g_mqtt_data[topic_name]['indoor_temperature']
-        indoor_temp_change = g_mqtt_data[topic_name]['indoor_temp_change']
+        indoor_temp = g_mqtt_data[topic_name].get('indoor_temperature', 0)
+        indoor_temp_change = g_mqtt_data[topic_name].get('indoor_temp_change', 0)
 
         draw.text((start_x, start_y),
                   'K', inky_display.BLACK, font=this_font)
@@ -226,37 +226,40 @@ def draw_forecast(inky_display, draw, this_font, start_y):
 
     count = 1
     max_items = 4
+    # Use getbbox for Pillow 10+ compatibility (getsize was removed)
+    line_height = this_font.getbbox('Ay')[3]
 
-    if 'weathergov/warnings' in g_mqtt_data:
-        for warning in g_mqtt_data['weathergov/warnings']:
-            day_str = '{}: {}'.format(warning['title'].title(),
-                                      warning['desc'])
-            str_w, str_h = this_font.getsize(day_str)
-            draw.text((7, start_y + (count * str_h)),
-                      day_str, inky_display.RED, font=this_font)
+    warnings = g_mqtt_data.get('weathergov/warnings', [])
+    for warning in warnings:
+        title = warning.get('title', '')
+        desc = warning.get('desc', '')
+        day_str = '{}: {}'.format(title.title(), desc)
+        draw.text((7, start_y + (count * line_height)),
+                  day_str, inky_display.RED, font=this_font)
 
-            count += 1
+        count += 1
 
-            # Only show max_items
-            # Return here vs break later
-            if (count > max_items):
-                return
+        # Only show max_items
+        # Return here vs break later
+        if (count > max_items):
+            return
 
-    for day_info in g_mqtt_data['weathergov/forecast']:
-        time_str = day_info['day']
+    forecast = g_mqtt_data.get('weathergov/forecast', [])
+    for day_info in forecast:
+        time_str = day_info.get('day', '')
         time_str = re.sub('BIRTHDAY', 'BDAY', time_str)
         time_str = re.sub(r'(\S{3})\S*DAY', r'\1', time_str)
         time_str = re.sub(r'THIS ', r'', time_str)
 
         day_str = '{}: {}, {}\u00b0'.format(time_str,
-                                            day_info['forecast'],
-                                            day_info['temp'])
+                                            day_info.get('forecast', ''),
+                                            day_info.get('temp', ''))
 
-        if day_info['precip_amount']:
-            day_str += ' {}'.format(day_info['precip_amount'])
+        precip_amount = day_info.get('precip_amount')
+        if precip_amount:
+            day_str += ' {}'.format(precip_amount)
 
-        str_w, str_h = this_font.getsize(day_str)
-        draw.text((7, start_y + (count * str_h)),
+        draw.text((7, start_y + (count * line_height)),
                   day_str, inky_display.BLACK, font=this_font)
 
         count += 1
@@ -356,9 +359,16 @@ while(1):
     if (current_hour >= 7 and current_hour <= 23 and
             current_minute % 15 == 0 and
             time_since_last_update > 60):
+        # Check for minimum required MQTT data before painting
+        if 'weewx/sensor' not in g_mqtt_data:
+            print('Waiting for weewx/sensor data...')
+            continue
         print('Updating display...')
-        paint_image()
-        last_update_time = current_time
+        try:
+            paint_image()
+            last_update_time = current_time
+        except Exception as e:
+            print(f'Error updating display: {e}')
 
     # Sample mqtt data
     # weewx/sensor -> {"outdoor_temperature": 43.9, "indoor_temperature": 70.5,
