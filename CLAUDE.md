@@ -286,6 +286,60 @@ git push -u origin claude/add-claude-documentation-UrLFH
 ### System Dependencies
 - `/usr/bin/python3` - Python 3 interpreter
 - TrueType fonts in `freefont/FreeSansBold.ttf` (relative to working dir)
+- Pillow must be compiled with FreeType support (requires `libfreetype6-dev`)
+
+## Troubleshooting
+
+### GPIO "Not running on a RPi!" Error
+
+**Symptom**: Script crashes with `RuntimeError: Not running on a RPi!` when calling `inky_display.show()` or GPIO operations.
+
+**Cause**: The `/dev/gpiomem` device doesn't have proper permissions for the `gpio` group.
+
+**Diagnosis**:
+```bash
+# Check permissions (should be crw-rw---- with group gpio)
+ls -la /dev/gpiomem
+
+# Test GPIO access
+python3 -c "import RPi.GPIO as GPIO; GPIO.setmode(GPIO.BCM); GPIO.setup(22, GPIO.OUT); print('GPIO OK'); GPIO.cleanup()"
+```
+
+**Fix**:
+```bash
+# Set correct permissions
+sudo chown root:gpio /dev/gpiomem
+sudo chmod g+rw /dev/gpiomem
+
+# Make permanent across reboots with udev rule
+echo 'KERNEL=="gpiomem", GROUP="gpio", MODE="0660"' | sudo tee /etc/udev/rules.d/99-gpio.rules
+```
+
+**Verify** the `pi` user is in the `gpio` group:
+```bash
+groups pi  # Should include: gpio
+```
+
+### Pillow FreeType Error
+
+**Symptom**: `ImportError: cannot import name '_imagingft' from 'PIL'`
+
+**Cause**: Pillow was compiled without FreeType font support.
+
+**Fix**:
+```bash
+sudo apt-get install -y libfreetype6-dev libjpeg-dev zlib1g-dev libpng-dev python3-dev
+pip3 install --no-cache-dir --force-reinstall pillow
+```
+
+### inky Library Version Issues
+
+**inky 1.5.0**: May show "Not running on a RPi!" if GPIO permissions are wrong (see above).
+
+**inky 2.x**: Uses different GPIO backend (gpiod). May show "Chip Select pin in use" error due to SPI conflicts. Stick with 1.5.0 if this occurs:
+```bash
+pip3 install inky==1.5.0
+```
 
 ## Key Technical Details
 
