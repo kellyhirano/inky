@@ -17,36 +17,57 @@ from suntime import Sun, SunTimeException
 g_mqtt_data = {}
 g_awair_mqtt_rooms = ()
 g_awair_mqtt_ext_rooms = ()
+g_mqtt_connected = False
 
 
 def on_connect(client, userdata, flags, rc):
     """The callback for when the client receives a CONNACK server response."""
+    global g_mqtt_connected
 
-    print("Connected with result code "+str(rc))
+    if rc == 0:
+        print("Connected to MQTT broker")
+        g_mqtt_connected = True
 
-    mqtt_subscriptions = [("weathergov/forecast", 0),
-                          ("weathergov/warnings", 0),
-                          ("weewx/sensor", 0),
-                          ("purpleair/sensor", 0)]
-    for room_list in (g_awair_mqtt_rooms, g_awair_mqtt_ext_rooms):
-        for awair_mqtt_room in room_list:
-            print(awair_mqtt_room)
-            room_tuple = ("awair/" + awair_mqtt_room + "/sensor", 0)
-            mqtt_subscriptions.append(room_tuple)
+        mqtt_subscriptions = [("weathergov/forecast", 0),
+                              ("weathergov/warnings", 0),
+                              ("weewx/sensor", 0),
+                              ("purpleair/sensor", 0)]
+        for room_list in (g_awair_mqtt_rooms, g_awair_mqtt_ext_rooms):
+            for awair_mqtt_room in room_list:
+                print(awair_mqtt_room)
+                room_tuple = ("awair/" + awair_mqtt_room + "/sensor", 0)
+                mqtt_subscriptions.append(room_tuple)
 
-    # Subscribing in on_connect() means that if we lose the connection and
-    # reconnect then subscriptions will be renewed.
-    client.subscribe(mqtt_subscriptions)
+        # Subscribing in on_connect() means that if we lose the connection and
+        # reconnect then subscriptions will be renewed.
+        client.subscribe(mqtt_subscriptions)
+    else:
+        print(f"Connection failed with code {rc}")
+        g_mqtt_connected = False
+
+
+def on_disconnect(client, userdata, rc):
+    """The callback for when the client disconnects from the server."""
+    global g_mqtt_connected
+    g_mqtt_connected = False
+    if rc != 0:
+        print(f"Unexpected MQTT disconnection (rc={rc}). Will auto-reconnect...")
+    else:
+        print("Disconnected from MQTT broker")
 
 
 def on_message(client, userdata, msg):
     """The callback for when a PUBLISH message is received from the server."""
     global g_mqtt_data
 
-    print("MESSAGE: "+msg.topic+" -> "+str(msg.payload.decode('UTF-8')))
-    message_data = json.loads(str(msg.payload.decode('UTF-8')))
-
-    g_mqtt_data[msg.topic] = message_data
+    try:
+        print("MESSAGE: "+msg.topic+" -> "+str(msg.payload.decode('UTF-8')))
+        message_data = json.loads(str(msg.payload.decode('UTF-8')))
+        g_mqtt_data[msg.topic] = message_data
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse MQTT message on {msg.topic}: {e}")
+    except Exception as e:
+        print(f"Error processing MQTT message: {e}")
 
 
 def draw_outside_temp_text_line(inky_display, draw, main_font,
@@ -326,6 +347,7 @@ g_awair_mqtt_ext_rooms = json.loads(config.get('AWAIR', 'mqtt_ext_subs'))
 
 client = mqtt.Client()
 client.on_connect = on_connect
+client.on_disconnect = on_disconnect
 client.on_message = on_message
 
 client.connect_async(mqtt_host, mqtt_host_port, 60)
@@ -348,6 +370,11 @@ while(1):
     # Moved sleep to top to allow for mqtt initialization
     time.sleep(10)
 
+    # Log connection status periodically
+    if not g_mqtt_connected:
+        print('MQTT disconnected, waiting for reconnection...')
+        continue
+
     current_time = int(time.time())
     time_since_last_update = current_time - last_update_time
     current_hour = int(time.strftime("%H", time.localtime()))
@@ -369,6 +396,9 @@ while(1):
             last_update_time = current_time
         except Exception as e:
             print(f'Error updating display: {e}')
+            # Update timestamp even on error to prevent rapid retry storm
+            # (e-ink displays have limited refresh cycles)
+            last_update_time = current_time
 
     # Sample mqtt data
     # weewx/sensor -> {"outdoor_temperature": 43.9, "indoor_temperature": 70.5,
