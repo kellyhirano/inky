@@ -1,0 +1,2 @@
+fonts-freefont-ttf
+python3-rpi.gpio

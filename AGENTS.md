@@ -9,9 +9,11 @@ This repo is a single-purpose Python 3 app for the Pimoroni Inky wHAT e-paper di
 - `inky.conf`: runtime config (not tracked).
 
 ## Build, Test, and Development Commands
-- Install deps (on Raspberry Pi): `sudo pip3 install -r requirements.txt`.
+- Install OS deps (on Raspberry Pi): `sudo apt-get install -y $(cat apt.txt)`.
+- Install Python deps (venv): `python3 -m venv --system-site-packages venv && venv/bin/pip install -r requirements.txt`.
 - Run locally: `python3 weather.py`.
 - Enable service: `sudo cp etc/systemd/system/inky-weather.service /etc/systemd/system/` and `sudo systemctl enable --now inky-weather`.
+- Ansible deploy (from controller): `ansible-playbook -i /home/hirano/dev/ansible/inventory/pis /home/hirano/dev/ansible/playbooks/inky-deploy.yml --ask-vault-pass`.
 
 ## Coding Style & Naming Conventions
 - Python 3, 4-space indentation, snake_case for functions, globals prefixed with `g_`.
@@ -25,11 +27,11 @@ This repo is a single-purpose Python 3 app for the Pimoroni Inky wHAT e-paper di
 | `purpleair/sensor` | AQI values and deltas. |
 | `weathergov/forecast` | Short-term forecast data. |
 | `weathergov/warnings` | Alert headlines. |
-| `awair/<room>/sensor` | Indoor air quality by room. |
+| `awair/<location>/<room>/sensor` | Indoor air quality by room. |
 
 ## Testing Guidelines
 - No automated tests; validate with live MQTT data and physical hardware.
-- Display updates occur every 15 minutes during active hours (7 AM–11 PM); verify schedule changes carefully.
+- Display updates occur every 15 minutes during active hours (6:30 AM–10:30 PM); verify schedule changes carefully.
 
 ## Commit & Pull Request Guidelines
 - Use short, imperative commit messages (“Add forecast warning handling”).
@@ -38,3 +40,5 @@ This repo is a single-purpose Python 3 app for the Pimoroni Inky wHAT e-paper di
 
 ## Configuration & Ops Notes
 - `inky.conf` must define MQTT host/port and Awair room lists; update docs when adding new config keys.
+- `requirements.txt` pins `inky==1.5.0` to avoid SPI/gpiod conflicts on some Pis.
+- `apt.txt` includes `fonts-freefont-ttf` and `python3-rpi.gpio`; the venv must include system packages to see `python3-rpi.gpio`.

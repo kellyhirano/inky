@@ -5,6 +5,8 @@ import json
 import sys
 import time
 import re
+import traceback
+import urllib.request
 import paho.mqtt.client as mqtt
 import datetime
 
@@ -17,7 +19,9 @@ from suntime import Sun, SunTimeException
 g_mqtt_data = {}
 g_awair_mqtt_rooms = ()
 g_awair_mqtt_ext_rooms = ()
+g_heartbeat_url = None
 g_mqtt_connected = False
+g_recent_disconnect = False  # True if we've disconnected since last display refresh
 
 
 def on_connect(client, userdata, flags, rc):
@@ -31,7 +35,9 @@ def on_connect(client, userdata, flags, rc):
         mqtt_subscriptions = [("weathergov/forecast", 0),
                               ("weathergov/warnings", 0),
                               ("weewx/sensor", 0),
-                              ("purpleair/sensor", 0)]
+                              ("purpleair/sensor", 0),
+                              ("rainforest/load", 0),
+                              ("pool/sensor", 0)]
         for room_list in (g_awair_mqtt_rooms, g_awair_mqtt_ext_rooms):
             for awair_mqtt_room in room_list:
                 print(awair_mqtt_room)
@@ -48,8 +54,9 @@ def on_connect(client, userdata, flags, rc):
 
 def on_disconnect(client, userdata, rc):
     """The callback for when the client disconnects from the server."""
-    global g_mqtt_connected
+    global g_mqtt_connected, g_recent_disconnect
     g_mqtt_connected = False
+    g_recent_disconnect = True
     if rc != 0:
         print(f"Unexpected MQTT disconnection (rc={rc}). Will auto-reconnect...")
     else:
@@ -98,12 +105,12 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     delta_str = '{:+.1f}\u00b0'.format(float(temp_delta))
     delta_24h_str = '{:+.1f}\u00b0'.format(float(temp_24h_delta))
     delta_x = 120
-    draw.text((delta_x + delta_x_offset, start_y + delta_y_offset + 52),
+    draw.text((delta_x + delta_x_offset, start_y + delta_y_offset + 49),
               delta_str, inky_display.BLACK, font=diff_font)
-    draw.text((delta_x, start_y + 72),
+    draw.text((delta_x, start_y + 69),
               delta_24h_str, inky_display.BLACK, font=diff_font)
 
-    y_coord = start_y + 96 + 5
+    y_coord = start_y + 90
 
     rain_rate = weewx.get('rain_rate', 0)
     last_day_rain = weewx.get('last_day_rain', 0)
@@ -118,18 +125,18 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
     aqi_str = 'A{} {:+d}  L{} {:+d}'.format(aqi, last_hour_aqi,
                                             lrapa_aqi, last_hour_lrapa_aqi)
     draw.text((start_x, y_coord), aqi_str, inky_display.BLACK, font=diff_font)
-    y_coord += 18 + 5
+    y_coord += 18 + 3
 
     if (aqi > 100):
         draw.text((start_x, y_coord), aqi_desc,
                   inky_display.RED, font=diff_font)
-        y_coord += 18 + 5
+        y_coord += 18 + 3
 
     if (wind_gust >= 10):
         wind_str = 'GUST: {}'.format(wind_gust)
         draw.text((start_x, y_coord),
                   wind_str, inky_display.BLACK, font=diff_font)
-        y_coord += 18 + 5
+        y_coord += 18 + 3
 
     if (last_day_rain > 0):
         last_day_rain_str = '24h: {}"'.format(last_day_rain)
@@ -137,7 +144,14 @@ def draw_outside_temp_text_line(inky_display, draw, main_font,
             last_day_rain_str += ' @{:.2f}"/h'.format(rain_rate)
         draw.text((start_x, y_coord),
                   last_day_rain_str, inky_display.BLACK, font=diff_font)
-        y_coord += 18 + 5
+        y_coord += 18 + 3
+
+    rainforest = g_mqtt_data.get('rainforest/load', {})
+    power_kw = rainforest.get('instantaneous')
+    if power_kw is not None:
+        draw.text((start_x, y_coord), '{:.2f}kW'.format(float(power_kw)),
+                  inky_display.BLACK, font=diff_font)
+        y_coord += 18 + 3
 
 
 def draw_awair_text_line(inky_display, draw, this_font, start_x, start_y,
@@ -292,7 +306,7 @@ def draw_forecast(inky_display, draw, this_font, start_y):
 
 def paint_image():
     """Paints the entire display, calling other draw functions."""
-    inky_display = InkyWHAT("red")
+    global inky_display
 
     img = Image.new("P", (inky_display.WIDTH, inky_display.HEIGHT))
     draw = ImageDraw.Draw(img)
@@ -313,25 +327,53 @@ def paint_image():
     draw_outside_temp_text_line(inky_display, draw, giant_font,
                                 large_font, small_font, 7, 0)
 
+    # Align Awair rows with the visual top of the large temperature text.
+    # The 96pt font bbox top=8, 20pt bbox top=1, so offset by the difference.
+    temp_val = float(g_mqtt_data.get('weewx/sensor', {}).get('outdoor_temperature', 0))
+    temp_font = large_font if temp_val >= 100 else giant_font
+    _, temp_top, _, _ = temp_font.getbbox('{}\u00b0'.format(int(temp_val)))
+    _, awair_top, _, _ = regular_font.getbbox('F')
+    awair_start_y = temp_top - awair_top
+
     count = 0
     start_x = 175
-    start_y = 7
     for awair_mqtt_room in g_awair_mqtt_rooms:
         draw_awair_text_line(inky_display, draw, regular_font,
-                             start_x, start_y + ((font_size+1)*count),
+                             start_x, awair_start_y + ((font_size+1)*count),
                              awair_mqtt_room)
         count += 1
 
-    start_y = start_y + ((font_size+1)*count)
+    start_y = awair_start_y + ((font_size+1)*count)
     draw_kitchen_temp_text_line(inky_display, draw, regular_font,
                                 start_x, start_y)
     draw_ext_awair_text_line(inky_display, draw, regular_font, 7, start_y)
+
+    pool = g_mqtt_data.get('pool/sensor', {})
+    pool_temp = pool.get('pool_temp')
+    if pool_temp is not None:
+        pool_str = 'Pool:{:.0f}\u00b0 P:{} H:{} S:{} L:{}'.format(
+            pool_temp,
+            pool.get('pool_pump', '?'),
+            pool.get('pool_heater', '?'),
+            pool.get('spa_heater', '?'),
+            pool.get('pool_light', '?'))
+        draw.text((7, inky_display.HEIGHT - 95 - 23),
+                  pool_str, inky_display.BLACK, font=small_font)
 
     draw.line([(0, inky_display.HEIGHT - 95),
                (inky_display.WIDTH - 1, inky_display.HEIGHT - 95)],
               fill=inky_display.BLACK, width=2)
 
     draw_forecast(inky_display, draw, small_font, inky_display.HEIGHT - 110)
+
+    # Show a small red "DC" badge in top-right corner if we've had a recent
+    # disconnect. Clears after being shown once.
+    global g_recent_disconnect
+    if g_recent_disconnect:
+        dc_font = ImageFont.truetype("freefont/FreeSansBold.ttf", 16)
+        draw.text((inky_display.WIDTH - 28, 2), "DC",
+                  inky_display.RED, font=dc_font)
+        g_recent_disconnect = False
 
     inky_display.set_image(img)
     inky_display.show()
@@ -344,6 +386,7 @@ mqtt_host = config.get('ALL', 'mqtt_host')
 mqtt_host_port = int(config.get('ALL', 'mqtt_host_port'))
 g_awair_mqtt_rooms = json.loads(config.get('AWAIR', 'mqtt_subs'))
 g_awair_mqtt_ext_rooms = json.loads(config.get('AWAIR', 'mqtt_ext_subs'))
+g_heartbeat_url = config.get('ALL', 'heartbeat_url', fallback=None)
 
 client = mqtt.Client()
 client.on_connect = on_connect
@@ -352,6 +395,8 @@ client.on_message = on_message
 
 client.connect_async(mqtt_host, mqtt_host_port, 60)
 client.loop_start()
+
+inky_display = InkyWHAT("red")
 
 time.tzset()
 current_time = 0
@@ -366,6 +411,8 @@ sunset = sun.get_local_sunset_time()
 print('sunrise {}, sunset {}'.format(sunrise.strftime('%H:%M'),
                                      sunset.strftime('%H:%M')))
 
+last_heartbeat_time = 0
+
 while(1):
     # Moved sleep to top to allow for mqtt initialization
     time.sleep(10)
@@ -376,6 +423,15 @@ while(1):
         continue
 
     current_time = int(time.time())
+
+    # Ping heartbeat at most once every 10 minutes regardless of display hours
+    if g_heartbeat_url and current_time - last_heartbeat_time >= 600:
+        try:
+            urllib.request.urlopen(g_heartbeat_url, timeout=5)
+            last_heartbeat_time = current_time
+        except Exception:
+            pass
+
     time_since_last_update = current_time - last_update_time
     current_hour = int(time.strftime("%H", time.localtime()))
     current_minute = int(time.strftime("%M", time.localtime()))
@@ -383,7 +439,9 @@ while(1):
     # Only update the display during certain hours on the :15's
     # and if it's not been updated for a minute to prevent multiple updates
     # in the same minute.
-    if (current_hour >= 7 and current_hour <= 23 and
+    current_total_minutes = current_hour * 60 + current_minute
+    if (current_total_minutes >= 6 * 60 + 30 and
+            current_total_minutes < 22 * 60 + 30 and
             current_minute % 15 == 0 and
             time_since_last_update > 60):
         # Check for minimum required MQTT data before painting
@@ -396,6 +454,7 @@ while(1):
             last_update_time = current_time
         except Exception as e:
             print(f'Error updating display: {e}')
+            traceback.print_exc()
             # Update timestamp even on error to prevent rapid retry storm
             # (e-ink displays have limited refresh cycles)
             last_update_time = current_time
