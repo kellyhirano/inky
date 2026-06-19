@@ -172,7 +172,7 @@ def draw_awair_text_line(inky_display, draw, this_font, start_x, start_y,
             aqi = g_mqtt_data[topic_name]['aqi']
 
         draw.text((start_x, start_y),
-                  topic_substr[0], inky_display.BLACK,
+                  topic_substr.split('/')[-1][0], inky_display.BLACK,
                   font=this_font)
         draw.text((start_x + 25, start_y),
                   '{}\u00b0'.format(temperature),
