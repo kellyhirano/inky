@@ -1,5 +1,6 @@
 paho-mqtt~=1.5.0
-Pillow~=10.4
+# Pin a release containing all Pillow security fixes known at this update.
+Pillow==12.3.0
 font-hanken-grotesk
 inky==1.5.0
 suntime
